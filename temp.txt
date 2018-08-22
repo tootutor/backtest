@@ -1,0 +1,19 @@
+ Volume in drive C has no label.
+ Volume Serial Number is A1DB-8533
+
+ Directory of C:\Dev\electron-quick-start-master
+
+08/22/2018  07:29 AM    <DIR>          .
+08/22/2018  07:29 AM    <DIR>          ..
+07/19/2018  09:40 AM                13 .gitignore
+08/22/2018  08:48 AM             2,047 index.html
+07/19/2018  09:40 AM             6,546 LICENSE.md
+07/25/2018  03:17 PM             1,759 main.js
+07/19/2018  09:46 AM    <DIR>          node_modules
+07/19/2018  09:46 AM            43,113 package-lock.json
+07/19/2018  09:40 AM               434 package.json
+07/19/2018  09:40 AM             2,317 README.md
+07/25/2018  03:22 PM               211 renderer.js
+08/22/2018  08:48 AM                 0 temp.txt
+               9 File(s)         56,440 bytes
+               3 Dir(s)  856,275,767,296 bytes free

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 90%;
+            font-family: monospace;
+            font-size: 10pt;
+        }
+        
+        th {
+            background-color: #CCCCCC;
+        }
+        
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        textarea {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 onclick="toggleArea('dirArea', 'dirShort');">Directory <span id="dirShort" hidden>(+)</span></h1>
+    <div id="dirArea">
+        Base: <input id="basePath" size=50 value="C:\My\Program\XM Global MT4\tester\files">
+        <input type="button" value="Set Path" onclick="setDefaultPath();">
+        <input type="button" value="Save Path" onclick="saveDefaultPath();">
+        <input type="button" value="Load Path" onclick="loadDefaultPath();">
+        <div>Action File: <input id="actionFile" size=100 disabled></div>
+        <div>Active File: <input id="activeOrderFile" size=100 disabled></div>
+        <div>History File: <input id="historyOrderFile" size=100 disabled></div>
+        <div>Account File: <input id="accountFile" size=100 disabled></div>
+    </div>
+    <hr>
+    <h1 onclick="toggleArea('calArea', 'calShort');">Calculation <span id="calShort" hidden>(+)</span></h1>
+    <div id="calArea">
+        <span>Contract: <input id="contract" size=7 value=100000></span>
+        <span>Point: <input id="point" size=7 value=0.00001></span>
+        <span>Balance: <input id="balance" size=7 value=1000></span>
+        <span>%Loss: <input id="loss" size=3 value=1></span>
+        <span>Price1: <input id="price1" size=5></span>
+        <span>Price2: <input id="price2" size=5></span>
+        <input type="button" value="Calculate" onclick="calculateLot();">
+        <span>FX Lot: <input id="fxLot" size=5></span>
+        <span>CFD Lot: <input id="cfdLot" size=5></span>
+    </div>
+    <hr>
+    <h1>Set up Action</h1>
+    <form id="actionForm">
+        <span id="actionArea">
+        Action:
+        <select id="action" onchange="refreshForm();">
+            <option value="">
+            <option value="SETUP"> SETUP
+            <option value="BUY"> BUY
+            <option value="SELL"> SELL
+            <option value="BUYSTOP"> BUY STOP
+            <option value="SELLSTOP"> SELL STOP
+            <option value="BUYLIMIT"> BUY LIMIT
+            <option value="SELLLIMIT"> SELL LIMIT
+            <option value="MODIFY"> MODIFY
+            <option value="MODIFYTP"> MODIFY TP
+            <option value="MODIFYSL"> MODIFY SL
+            <option value="DELETE"> DELETE
+            <option value="CLOSE"> CLOSE
+        </select>
+    </span>
+        <span id="slipArea">
+            Slip:<input id="slip" type="number" size=8 value=10>
+        </span>
+        <span id="ticketArea">
+            Ticket:<input id="ticket" size=8 value=0>
+        </span>
+        <span id="lotArea">
+            Lot:<input id="lot" size=5 value=0.01>
+        </span>
+        <span id="priceArea">
+            Price:<input id="price" size=5 value=0>
+        </span>
+        <span id="tpArea">
+            TP:<input id="tp" size=7 value=0>
+        </span>
+        <span id="slArea">
+            SL:<input id="sl" size=7 value="0">
+        </span>
+        <span id="commentArea">
+            Comment:<input id="comment" size=20 value="">
+        </span>
+        <input type="button" value="Add" onclick="addAction();">
+        <!--<input type="button" value="Check" onclick="checkActionFile();">-->
+        <input type="button" value="Check" onclick="loadAction();">
+        <input type="reset" value="Reset">
+    </form>
+    <div id="showActionList"></div>
+    <hr>
+    <input type="button" value="Save Action to File" onclick="saveActionFile();">
+    <hr>
+    <h4>Waiting to process . . .</h4>
+    <div id="savedActionList"></div>
+    <input type="button" value="Clear All Action" onclick="clearAllAction();">
+    <hr>
+    <h1>Result</h1>
+    <input type="button" value="Refresh Result" onclick="loadResult();"><br>
+    <h3>Account Info</h3>
+    <div id="showAccount"></div>
+    <h3>Active List</h3>
+    <div id="showActiveOrder"></div>
+    <h3>History List</h3>
+    <div id="showHistoryOrder"></div>
+    <hr>
+
+    <script>
+        var actionObj = [];
+        var saveAction = "";
+
+        function toggleArea(divId, shortId) {
+            document.getElementById(divId).hidden = !document.getElementById(divId).hidden;
+            document.getElementById(shortId).hidden = !document.getElementById(shortId).hidden;
+        }
+
+        function calculateLot() {
+            var contract = document.getElementById("contract").value;
+            var point = document.getElementById("point").value;
+            var balance = document.getElementById("balance").value;
+            var loss = document.getElementById("loss").value;
+            var price1 = document.getElementById("price1").value;
+            var price2 = document.getElementById("price2").value;
+            var range = Math.abs(price1 - price2);
+            var fxRange = range / point;
+            var fxLot = (0.01 * loss * balance) / fxRange;
+            var cfdLot = (0.01 * loss * balance) / (range * contract);
+            document.getElementById("fxLot").value = fxLot;
+            document.getElementById("cfdLot").value = cfdLot;
+        }
+
+        function setAction(idx) {
+            if (actionObj[idx].Active == "Y") {
+                actionObj[idx].Active = "N";
+            } else {
+                actionObj[idx].Active = "Y";
+            }
+            // Re-render HTML table.
+            OBJ2HTMLTable(actionObj, "showActionList");
+        }
+
+        function CSV2HTMLTable(csv, divId) {
+            var obj = CSV2OBJ(csv);
+            OBJ2HTMLTable(obj, divId);
+        }
+
+        function OBJ2HTMLTable(obj, divId) {
+            var table = formatHTMLTable(obj);
+            var divContainer = document.getElementById(divId);
+            divContainer.innerHTML = "";
+            divContainer.appendChild(table);
+        }
+
+        function setDefaultPath() {
+            var basePath = document.getElementById("basePath").value;
+            document.getElementById("actionFile").value = basePath + "\\ManualBackTesterAction.csv";
+            document.getElementById("activeOrderFile").value = basePath + "\\ManualBackTesterActiveOrder.csv";
+            document.getElementById("historyOrderFile").value = basePath + "\\ManualBackTesterHistoryOrder.csv";
+            document.getElementById("accountFile").value = basePath + "\\ManualBackTesterAccount.csv";
+        }
+
+        function saveDefaultPath() {
+            var basePath = document.getElementById("basePath").value;
+            localStorage.setItem("basePath", basePath);
+        }
+
+        function loadDefaultPath() {
+            try {
+                var basePath = localStorage.getItem("basePath");
+                if (basePath > "") {
+                    document.getElementById("basePath").value = basePath;
+                }
+            } catch (err) {
+                console.log("No default path save.");
+            }
+            setDefaultPath();
+        }
+
+        function loadAction() {
+            const fs = require('fs');
+            // Get file name from the input box
+            var actionFile = document.getElementById('actionFile').value;
+            if (actionFile > "") {
+                fs.readFile(actionFile, 'utf8', (err, fText) => {
+                    if (err) {
+                        console.log('=== Read Action Error ===');
+                        console.log(err);
+                    } else {
+                        saveAction = fText;
+                        CSV2HTMLTable(fText, "savedActionList");
+                    }
+                });
+            }
+        }
+
+        function checkActionFile() {
+            const fs = require('fs');
+            // Get file name from the input box
+            var actionFile = document.getElementById('actionFile').value;
+            if (actionFile > "") {
+                try {
+                    fs.readFile(actionFile, 'utf8', (err, fText) => {
+                        if (err) {
+                            console.log('=== Read Error ===');
+                            console.log(err);
+                        } else {
+                            var fTextArr = fText.split("\r\n");
+                            for (var i = 0; i < fTextArr.length; i++) {
+                                if (fTextArr[i] == "Active,Action,Parameters") {
+                                    continue;
+                                } else {
+                                    if (fTextArr[i] == "") {
+                                        continue;
+                                    } else {
+                                        alert("Actions exist - waiting to process.");
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } catch (err) {
+                    alert("Need to execute backtest first !!!");
+                    return false;
+                }
+            } else {
+                alert("Check directory set up !!!");
+                return false;
+            }
+            return true;
+        }
+
+        function addAction() {
+            //if (!checkActionFile()) {
+            //    return;
+            //}
+
+            var action = document.getElementById("action").value;
+            var parameters = "";
+            switch (action) {
+                case "SETUP":
+                    parameters = "slip=" + document.getElementById("slip").value;
+                    break;
+                case "BUY":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "SELL":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "BUYSTOP":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "price=" + document.getElementById("price").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "SELLSTOP":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "price=" + document.getElementById("price").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "BUYLIMIT":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "price=" + document.getElementById("price").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "SELLLIMIT":
+                    parameters = "lot=" + document.getElementById("lot").value + ";" +
+                        "price=" + document.getElementById("price").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value + ";" +
+                        "comment=" + document.getElementById("comment").value;
+                    break;
+                case "MODIFY":
+                    parameters = "ticket=" + document.getElementById("ticket").value + ";" +
+                        "tp=" + document.getElementById("tp").value + ";" +
+                        "sl=" + document.getElementById("sl").value;
+                    break;
+                case "MODIFYTP":
+                    parameters = "ticket=" + document.getElementById("ticket").value + ";" +
+                        "tp=" + document.getElementById("tp").value;
+                    break;
+                case "MODIFYSL":
+                    parameters = "ticket=" + document.getElementById("ticket").value + ";" +
+                        "sl=" + document.getElementById("sl").value;
+                    break;
+                case "DELETE":
+                    parameters = "ticket=" + document.getElementById("ticket").value;
+                    break;
+                case "CLOSE":
+                    parameters = "ticket=" + document.getElementById("ticket").value;
+                    break;
+                default:
+                    return;
+            }
+
+            // Add new action to object array.
+            var idx = actionObj.length;
+            actionObj[idx] = {};
+            actionObj[idx].Toggle = '<input type="button" value="Toggle" onclick="setAction(' + idx + ');">';
+            actionObj[idx].Active = "Y";
+            actionObj[idx].Action = action;
+            actionObj[idx].Parameters = parameters;
+
+            OBJ2HTMLTable(actionObj, "showActionList");
+        }
+
+        function saveActionFile() {
+            if (actionObj.length == 0) {
+                alert("No action");
+                return;
+            }
+
+            const fs = require('fs');
+
+            var actionFile = document.getElementById('actionFile').value;
+            if (actionFile > "") {
+                var textOutput = saveAction;
+                for (var i = 0; i < actionObj.length; i++) {
+                    var element = actionObj[i];
+                    textOutput += '\n' + element.Active + "," + element.Action + "," + element.Parameters;
+                }
+
+                fs.writeFile(actionFile, textOutput, (err) => {
+                    if (err) {
+                        console.log('=== Write Action Error ===');
+                        console.log(err);
+                    } else {
+                        alert("Saved to Action file");
+                        actionObj = [];
+
+                        OBJ2HTMLTable(actionObj, "showActionList");
+                    }
+                })
+            }
+
+            loadAction();
+        }
+
+        function clearAllAction() {
+            const fs = require('fs');
+
+            var actionFile = document.getElementById('actionFile').value;
+            if (actionFile > "") {
+                const headerLine = 'Active,Action,Parameters';
+                fs.writeFile(actionFile, headerLine, (err) => {
+                    if (err) {
+                        console.log('=== Write Action Error ===');
+                        console.log(err);
+                    } else {
+                        alert("Clear All Action !!!");
+                        actionObj = [];
+                        OBJ2HTMLTable(actionObj, "showActionList");
+                    }
+                });
+            }
+
+            loadAction();
+        }
+
+        function refreshForm() {
+            var action = document.getElementById("action").value;
+            switch (action) {
+                case "SETUP":
+                    document.getElementById("slipArea").hidden = false;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = true;
+                    document.getElementById("slArea").hidden = true;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+                case "BUY":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "SELL":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "BUYSTOP":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = false;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "SELLSTOP":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = false;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "BUYLIMIT":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = false;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "SELLLIMIT":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = true;
+                    document.getElementById("lotArea").hidden = false;
+                    document.getElementById("priceArea").hidden = false;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = false;
+                    break;
+                case "MODIFY":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = false;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+                case "MODIFYTP":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = false;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = false;
+                    document.getElementById("slArea").hidden = true;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+                case "MODIFYSL":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = false;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = true;
+                    document.getElementById("slArea").hidden = false;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+                case "DELETE":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = false;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = true;
+                    document.getElementById("slArea").hidden = true;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+                case "CLOSE":
+                    document.getElementById("slipArea").hidden = true;
+                    document.getElementById("ticketArea").hidden = false;
+                    document.getElementById("lotArea").hidden = true;
+                    document.getElementById("priceArea").hidden = true;
+                    document.getElementById("tpArea").hidden = true;
+                    document.getElementById("slArea").hidden = true;
+                    document.getElementById("commentArea").hidden = true;
+                    break;
+            }
+        }
+
+        function loadResult() {
+            loadAccount();
+            loadActiveOrder();
+            loadHistoryOrder();
+        }
+
+        function loadActiveOrder() {
+            const fs = require('fs'); // Get file name from the input box        
+            var activeOrderFile = document.getElementById('activeOrderFile').value;
+            if (activeOrderFile > "") {
+                fs.readFile(activeOrderFile, 'utf8', (err, fText) => {
+                    if (err) {
+                        console.log('=== Read Active Order Error ===');
+                        console.log(err);
+                    } else {
+                        CSV2HTMLTable(fText, "showActiveOrder");
+                    }
+                });
+            }
+        }
+
+        function loadHistoryOrder() {
+            const fs = require('fs');
+            // Get file name from the input box
+            var historyOrderFile = document.getElementById('historyOrderFile').value;
+            if (historyOrderFile > "") {
+                fs.readFile(historyOrderFile, 'utf8', (err, fText) => {
+                    if (err) {
+                        console.log('=== Read History Order Error ===');
+                        console.log(err);
+                    } else {
+                        CSV2HTMLTable(fText, "showHistoryOrder");
+                    }
+                });
+            }
+        }
+
+        function loadAccount() {
+            const fs = require('fs');
+            // Get file name from the input box
+            var accountFile = document.getElementById('accountFile').value;
+            if (accountFile > "") {
+                fs.readFile(accountFile, 'utf8', (err, fText) => {
+                    if (err) {
+                        console.log('=== Read Account Error ===');
+                        console.log(err);
+                    } else {
+                        CSV2HTMLTable(fText, "showAccount");
+                    }
+                });
+            }
+        }
+
+        function formatHTMLTable(obj) {
+            var col = [];
+            for (var i = 0; i < obj.length; i++) {
+                for (var key in obj[i]) {
+                    if (col.indexOf(key) === -1) {
+                        col.push(key);
+                    }
+                }
+            }
+
+            // CREATE DYNAMIC TABLE.
+            var table = document.createElement("table");
+
+            // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+
+            var tr = table.insertRow(-1); // TABLE ROW.
+
+            for (var i = 0; i < col.length; i++) {
+                var th = document.createElement("th"); // TABLE HEADER.
+                th.innerHTML = col[i];
+                tr.appendChild(th);
+            }
+
+            // ADD JSON DATA TO THE TABLE AS ROWS.
+            for (var i = 0; i < obj.length; i++) {
+
+                tr = table.insertRow(-1);
+
+                for (var j = 0; j < col.length; j++) {
+                    var tabCell = tr.insertCell(-1);
+                    tabCell.innerHTML = obj[i][col[j]];
+                }
+            }
+            return table;
+        }
+
+        function CSVToArray(strData, strDelimiter) {
+            // Check to see if the delimiter is defined. If not,
+            // then default to comma.
+            strDelimiter = (strDelimiter || ",");
+            // Create a regular expression to parse the CSV values.
+            var objPattern = new RegExp((
+                // Delimiters.
+                "(\\" + strDelimiter + "|\\r?\\n|\\r|^)" +
+                // Quoted fields.
+                "(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|" +
+                // Standard fields.
+                "([^\"\\" + strDelimiter + "\\r\\n]*))"), "gi");
+            // Create an array to hold our data. Give the array
+            // a default empty first row.
+            var arrData = [
+                []
+            ];
+            // Create an array to hold our individual pattern
+            // matching groups.
+            var arrMatches = null;
+            // Keep looping over the regular expression matches
+            // until we can no longer find a match.
+            while (arrMatches = objPattern.exec(strData)) {
+                // Get the delimiter that was found.
+                var strMatchedDelimiter = arrMatches[1];
+                // Check to see if the given delimiter has a length
+                // (is not the start of string) and if it matches
+                // field delimiter. If id does not, then we know
+                // that this delimiter is a row delimiter.
+                if (strMatchedDelimiter.length && (strMatchedDelimiter != strDelimiter)) {
+                    // Since we have reached a new row of data,
+                    // add an empty row to our data array.
+                    arrData.push([]);
+                }
+                // Now that we have our delimiter out of the way,
+                // let's check to see which kind of value we
+                // captured (quoted or unquoted).
+                if (arrMatches[2]) {
+                    // We found a quoted value. When we capture
+                    // this value, unescape any double quotes.
+                    var strMatchedValue = arrMatches[2].replace(
+                        new RegExp("\"\"", "g"), "\"");
+                } else {
+                    // We found a non-quoted value.
+                    var strMatchedValue = arrMatches[3];
+                }
+                // Now that we have our value string, let's add
+                // it to the data array.
+                arrData[arrData.length - 1].push(strMatchedValue);
+            }
+            // Return the parsed data.
+            return (arrData);
+        }
+
+        function CSV2JSON(csv) {
+            var array = CSVToArray(csv);
+            var objArray = [];
+            for (var i = 1; i < array.length; i++) {
+                if (array[i].length > 0 && array[i][0] > "") { // Make sure the array contain data
+                    objArray[i - 1] = {};
+                    for (var k = 0; k < array[0].length && k < array[i].length; k++) {
+                        var key = array[0][k];
+                        objArray[i - 1][key] = array[i][k]
+                    }
+                }
+            }
+
+            var json = JSON.stringify(objArray);
+            var str = json.replace(/},/g, "},\r\n");
+
+            return str;
+        }
+
+        function CSV2OBJ(csv) {
+            var array = CSVToArray(csv);
+            var objArray = [];
+            for (var i = 1; i < array.length; i++) {
+                if (array[i].length > 0 && array[i][0] > "") { // Make sure the array contain data
+                    objArray[i - 1] = {};
+                    for (var k = 0; k < array[0].length && k < array[i].length; k++) {
+                        var key = array[0][k];
+                        objArray[i - 1][key] = array[i][k]
+                    }
+                }
+            }
+
+            return objArray;
+        }
+
+        loadDefaultPath();
+        loadAction();
+    </script>
+</body>
+
+</html>
